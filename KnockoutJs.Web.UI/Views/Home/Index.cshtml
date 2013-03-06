@@ -1,0 +1,188 @@
+﻿@{
+    ViewBag.Title = "KnockoutJs";
+}
+
+@section scripts
+{
+    <script type="text/javascript">
+
+        // namespace
+        var my = my || {};
+
+        // model
+        my.WeightModel = function(kg, gr, date) {
+            var self = this;
+            this.kg = ko.observable(kg).extend({ number: true, required: true });
+            this.gr = ko.observable(gr).extend({ number: true, required: true });
+            this.created = date;
+            this.changed = ko.observable(date);
+            this.kg.subscribe(function(value) {
+                self.changed(new Date());
+            }, this);
+            this.gr.subscribe(function(value) {
+                self.changed(new Date());
+            }, this);
+            this.totalgr = function() {
+                return (self.kg() * 1000) + (self.gr() * 1);
+            };
+            this.totalkg = function() {
+                return (self.kg() * 1) + (self.gr() / 1000);
+            };
+            this.total = function() {
+                return self.kg() + 'kg - ' + self.gr() + 'gr';
+            };
+        };
+        
+        // view model
+        my.WeightViewModel = function(existingItems) {
+            var self = this;
+            this.items = ko.observableArray(existingItems);
+            this.kg = ko.observable().extend({ number: true, required: true });
+            this.gr = ko.observable().extend({ number: true, required: true });
+            this.msg = ko.observable("");
+            this.msgType = ko.observable("info");
+            this.title = ko.observable("Weight monitor");
+            this.addItem = function() {
+                if (!self.kg.isValid() || !self.gr.isValid()) {
+                    self.msgType("error");
+                    self.msg("You didn't enter any valid data.");
+                    return;
+                } else {
+                    self.msg("");
+                }
+                var itemToAdd = new my.WeightModel(self.kg(), self.gr(), new Date());
+                self.items.push(itemToAdd);
+                self.msgType("success");
+                self.msg("You've successfully added the value " + itemToAdd.total());
+            };
+            this.clearItems = function() {
+                self.items([]);
+                self.msgType("info");
+                self.msg("All entries have been cleared.");
+            };
+            this.hideAlert = function() {
+                self.msg("");
+            };
+            this.removeItem = function(item) {
+                self.items.remove(item);
+                self.msgType("info");
+                self.msg("The entry has been successfully removed.");
+            };
+            this.graph = {
+                showChartLabels: false,
+                legend: { visible: false },
+                label: "Weight",
+                legendEntry: false,
+                animation: {
+                    enabled: false
+                },
+                shadow: false,
+                seriesTransition: {
+                    enabled: false
+                },
+                hint: {
+                    enable: false
+                },
+                seriesList:
+                [
+                    {
+                        markers: { visible: true },
+                        data: ko.computed(function() {
+                            var dates = [];
+                            var totalkgs = [];
+                            $.each(self.items(), function (index, value) {
+                                totalkgs.push(value.totalkg());
+                                dates.push(value.created);
+                            });
+                            return {
+                                x: dates,
+                                y: totalkgs
+                            };
+                        }, this),
+                        offset: 0
+                    }
+                ]
+            };
+        };
+
+        // binding extension
+        ko.bindingHandlers.date = {
+            update: function(element, valueAccessor, allBindingsAccessor) {
+                var value = ko.utils.unwrapObservable(valueAccessor());
+                var date = $.format.date(value, "yyyy-MM-dd hh:mm:ss");
+                $(element).text(date);
+            }
+        };
+
+        // initialize bindings
+        var vm = new my.WeightViewModel(
+            [
+                new my.WeightModel(5, 54, new Date(2013, 1, 1, 12, 32)),
+                new my.WeightModel(4, 226, new Date(2013, 1, 9, 17, 44))
+            ]
+        );
+        ko.applyBindings(vm);
+
+        // resize helper for chart
+        $(function() {
+            $(window).resize(function() {
+                $('[data-bind*="wijlinechart"]').wijlinechart("redraw");
+            });
+        });
+    </script>
+}
+
+<div class="container">
+    <h1 data-bind="text: vm.title"></h1>
+    <div class="row">
+
+        <div data-bind="wijlinechart: vm.graph" class="chart"></div>
+
+        <form class="form-inline well" data-bind="submit: vm.addItem, validationOptions: { decorateElement: true, insertMessages: false, errorElementClass: 'input-validation-error' }">
+            <h3>Enter the weight below</h3>
+	
+            <label>kg</label>
+            <input type="text" class="input-mini" data-bind="value: vm.kg, valueUpdate: 'afterkeydown', hasfocus: true" />
+
+            <label>gr</label>
+            <input type="text" class="input-mini" data-bind="value: vm.gr, valueUpdate: 'afterkeydown'" />
+                
+            <button type="submit" class="btn btn-primary"><i class="icon-ok icon-white"></i> Add</button>
+        </form>
+
+        <div id="alert" class="alert" 
+             data-bind="visible: vm.msg().length > 0, css: { 
+			'alert-success': vm.msgType() == 'success', 
+			'alert-error': vm.msgType() == 'error', 
+			'alert-info': vm.msgType() == 'info' }">
+            <a class="close" href="#" data-bind="click: vm.hideAlert">×</a>
+            <p data-bind="text: vm.msg"></p>
+        </div>
+
+        <table class="table table-striped" data-bind="visible: vm.items().length > 0">
+            <thead>
+                <tr>
+                    <td>Kg</td>
+                    <td>Gr</td>
+                    <td>Last changed</td>
+                    <td>Created</td>
+                    <td>Total</td>
+                    <td>Delete</td>
+                </tr>
+            </thead>
+            <tbody data-bind="foreach: vm.items, validationOptions: { decorateElement: true, insertMessages: false, errorElementClass: 'input-validation-error' }">
+                <tr>
+                    <td><input type="text" class="input-mini" data-bind="value: kg, valueUpdate: 'afterkeydown'" /></td>
+                    <td><input type="text" class="input-mini" data-bind="value: gr, valueUpdate: 'afterkeydown'" /></td>
+                    <td data-bind="date: changed"></td>
+                    <td data-bind="date: created"></td>
+                    <td data-bind="text: total()"></td>
+                    <td><a href="#" data-bind="click: vm.removeItem"><i class="icon-remove"></i></a></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <button type="reset" class="btn btn-danger pull-right" data-bind="click: vm.clearItems"><i class="icon-remove icon-white"></i> Clear</button>
+            
+    </div>
+</div>
